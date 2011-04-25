@@ -1,77 +1,48 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-class BaseObject(object):
+import inspect
+
+class LazyData(object):
     def __init__(self, data):
         self.data = data
 
     def __getitem__(self, index):
+        if not isinstance(self.data, (int, float, str, unicode, list, dict)):
+            return path(self.data.__dict__[index])
+        if isinstance(self.data, list):
+            if self.data:
+                if isinstance(self.data[0], LazyData):
+                    return path([item.data.__dict__[index] for item in self.data])
+                if not isinstance(self.data[0], (int, float, str, unicode, list, dict)):
+                    return path([item.__dict__[index] for item in self.data])
+
         return self.__dict__['data'][index]
 
-
-class LazyDict(BaseObject):
-    def __getattr__(self, key):
-        if isinstance(self.data, list):
-            return [item[key] for item in self.data]
-
-        try:
-            value = self.__dict__['data'][key]
+    def __getattr__(self, attr):
+        if isinstance(self.data, dict):
+            value = self.__dict__['data'][attr]
             if isinstance(value, list):
                 return path(value)
-        except TypeError:
-            pass
 
-        if isinstance(self.__dict__['data'], dict):
             if isinstance(value, (int, float, str, unicode)):
                 return (value,)
 
-
-class LazyList(BaseObject):
-    def __getattr__(self, key):
         if isinstance(self.data, list):
             if self.data:
-                if self.data[0].__class__.__name__ == 'Meta':
-                    return [item[key] for item in self.data]
-                if isinstance(self.data[0], dict):
-                    return path([LazyDict(item)[key] for item in self.data
-                        if isinstance(item, dict) and (key in item)])
-                if isinstance(self.data[0], LazyDict):
-                    return [item[key] for item in self.data]
                 if isinstance(self.data[0], list):
                     concat_list = []
-                    [[concat_list.append(LazyDict(item)[key]) for item in items
-                        if isinstance(item, dict) and (key in item)]
+                    [[concat_list.append(path(item)[attr]) for item in items
+                        if isinstance(item, dict) and (attr in item)]
                             for items in self.data]
                     return path(concat_list)
-            return [path(item[key]) for item in self.__dict__['data']
-                if isinstance(item, dict) and (key in item)]
 
-        return super(LazyList, self).__getitem__(index)
-
-    def __getitem__(self, index):
-        if isinstance(self.data, list):
-            if self.data:
-                if self.data[0].__class__.__name__ == 'Meta':
-                    return path([LazyMeta(item)[index] for item in self.data])
-                if isinstance(self.data[0], list):
-                    return path([path(item)[index] for item in self.data])
-
-        return self.__dict__['data'][index]
+                return path([path(item)[attr] for item in self.data
+                    if isinstance(item, dict) and (attr in item)])
 
     def __getslice__(self, i, j):
         return path(self.data[max(0, i):max(0, j):])
 
-
-class LazyMeta(BaseObject):
-    def __getitem__(self, index):
-        if isinstance(self.data, list):
-            return path([item[index] for item in self.data])
-
-        return path(self.data.__dict__[index])
-
-
-def is_generator(data):
-    return True if 'next' in dir(data) else False
 
 def path(data):
     """Эта функция предназначена для выбора подмножества данных из переданного
@@ -92,6 +63,12 @@ def path(data):
     ...         self.dvalue = dict(a = value)
     ...     def __repr__(self):
     ...         return u'<meta: %s>' % self.value
+    >>>
+    >>> def infinite():
+    ...      counter = 0
+    ...      while True:
+    ...          yield Meta(counter)
+    ...          counter += 1
     >>>
     >>> data = {
     ...     'voices': 100500,
@@ -140,16 +117,28 @@ def path(data):
     >>> # и с генераторами
     >>> list(path(Meta(x) for x in xrange(10))['dvalue'].a)
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    >>> # с бесконечной последовательностью
+    >>> i = 0
+    >>> for item in infinite():
+    ...     list(path(item)['dvalue'].a)
+    ...     i += 1
+    ...     if 10 == i:
+    ...         break
+    [0]
+    [1]
+    [2]
+    [3]
+    [4]
+    [5]
+    [6]
+    [7]
+    [8]
+    [9]
     """
-    if isinstance(data, list):
-        return LazyList(data)
-    if isinstance(data, dict):
-        return LazyDict(data)
-    if is_generator(data):
-        return LazyMeta([path(item) for item in data])
-    if data.__class__.__name__ == 'Meta':
-        return LazyMeta(data)
-    return data
+    if inspect.isgenerator(data):
+        return path([LazyData(item) for item in data])
+    else:
+        return LazyData(data)
 
 if __name__ == '__main__':
     import doctest
