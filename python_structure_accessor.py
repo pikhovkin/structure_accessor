@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import inspect
+from inspect import isgenerator
+from itertools import imap, islice
+
 
 class LazyData(object):
     def __init__(self, data):
@@ -12,8 +14,6 @@ class LazyData(object):
             return path(self.data.__dict__[index])
         if isinstance(self.data, list):
             if self.data:
-                if isinstance(self.data[0], LazyData):
-                    return path([item.data.__dict__[index] for item in self.data])
                 if not isinstance(self.data[0], (int, float, str, unicode, list, dict)):
                     return path([item.__dict__[index] for item in self.data])
 
@@ -42,6 +42,29 @@ class LazyData(object):
 
     def __getslice__(self, i, j):
         return path(self.data[max(0, i):max(0, j):])
+
+
+class LazyGenData(object):
+    def __init__(self, data):
+        self.data = data
+
+    def __getattr__(self, attr):
+        for items in self.data:
+            item = items.next()
+            if isinstance(item, dict):
+                yield item[attr]
+            else:
+                yield item.__dict__[attr]
+
+    def _getitem(self, data):
+        return LazyGenData(data.__dict__['data'].__dict__[self._index])
+
+    def __getitem__(self, index):
+        self._index = index
+        return LazyGenData(imap(self._getitem, self.data))
+
+    def next(self):
+        return self.data
 
 
 def path(data):
@@ -117,26 +140,12 @@ def path(data):
     >>> # и с генераторами
     >>> list(path(Meta(x) for x in xrange(10))['dvalue'].a)
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    >>> # с бесконечной последовательностью
-    >>> i = 0
-    >>> for item in infinite():
-    ...     list(path(item)['dvalue'].a)
-    ...     i += 1
-    ...     if 10 == i:
-    ...         break
-    [0]
-    [1]
-    [2]
-    [3]
-    [4]
-    [5]
-    [6]
-    [7]
-    [8]
-    [9]
+    >>> # и с бесконечной последовательностью
+    >>> list(islice(path(infinite())['dvalue'].a, 0, 10))
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     """
-    if inspect.isgenerator(data):
-        return path([LazyData(item) for item in data])
+    if isgenerator(data):
+        return LazyGenData(imap(LazyGenData, data))
     else:
         return LazyData(data)
 
