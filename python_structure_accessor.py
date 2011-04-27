@@ -12,10 +12,10 @@ class LazyData(object):
     def __getitem__(self, index):
         if not isinstance(self.data, (int, float, str, unicode, list, dict)):
             return path(self.data.__dict__[index])
-        if isinstance(self.data, list):
-            if self.data:
-                if not isinstance(self.data[0], (int, float, str, unicode, list, dict)):
-                    return path([item.__dict__[index] for item in self.data])
+        if isinstance(self.data, list) and self.data:
+            if not isinstance(self.data[0],
+                (int, float, str, unicode, list, dict)):
+                return path([item.__dict__[index] for item in self.data])
 
         return self.__dict__['data'][index]
 
@@ -28,17 +28,16 @@ class LazyData(object):
             if isinstance(value, (int, float, str, unicode)):
                 return (value,)
 
-        if isinstance(self.data, list):
-            if self.data:
-                if isinstance(self.data[0], list):
-                    concat_list = []
-                    [[concat_list.append(path(item)[attr]) for item in items
-                        if isinstance(item, dict) and (attr in item)]
-                            for items in self.data]
-                    return path(concat_list)
+        if isinstance(self.data, list) and self.data:
+            if isinstance(self.data[0], list):
+                concat_list = []
+                [[concat_list.append(path(item)[attr]) for item in items
+                    if isinstance(item, dict) and (attr in item)]
+                        for items in self.data]
+                return path(concat_list)
 
-                return path([path(item)[attr] for item in self.data
-                    if isinstance(item, dict) and (attr in item)])
+            return path([path(item)[attr] for item in self.data
+                if isinstance(item, dict) and (attr in item)])
 
     def __getslice__(self, i, j):
         return path(self.data[max(0, i):max(0, j):])
@@ -51,10 +50,8 @@ class LazyGenData(object):
     def __getattr__(self, attr):
         for items in self.data:
             item = items.next()
-            if isinstance(item, dict):
-                yield item[attr]
-            else:
-                yield item.__dict__[attr]
+            yield item[attr] if isinstance(item, dict) else item.__dict__[attr]
+
 
     def _getitem(self, data):
         return LazyGenData(data.__dict__['data'].__dict__[self._index])
