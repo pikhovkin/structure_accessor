@@ -52,7 +52,6 @@ class LazyGenData(object):
             item = items.next()
             yield item[attr] if isinstance(item, dict) else item.__dict__[attr]
 
-
     def _getitem(self, data):
         return LazyGenData(data.__dict__['data'].__dict__[self._index])
 
