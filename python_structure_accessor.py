@@ -10,6 +10,9 @@ class LazyData(object):
         self.data = data
 
     def __getitem__(self, index):
+        if isinstance(index, slice):
+            return path(self.data[index.start: index.stop: index.step])
+
         if not isinstance(self.data, (int, float, str, unicode, list, dict)):
             return path(self.data.__dict__[index])
         if isinstance(self.data, list) and self.data:
@@ -38,9 +41,6 @@ class LazyData(object):
 
             return path([path(item)[attr] for item in self.data
                 if isinstance(item, dict) and (attr in item)])
-
-    def __getslice__(self, i, j):
-        return path(self.data[max(0, i):max(0, j):])
 
 
 class LazyGenData(object):
